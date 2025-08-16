@@ -10,6 +10,8 @@ import {
   updateProfile,
   updateEmail,
 } from "firebase/auth";
+import { useUserAuth } from "../_utils/auth-context";
+import { useRouter } from "next/navigation";
 
 export default function Profile() {
   const [firstName, setFirstName] = useState("");
@@ -21,45 +23,58 @@ export default function Profile() {
   const [deleting, setDeleting] = useState(false);
   const [updating, setUpdating] = useState(false);
 
+  const router = useRouter();
+  const { user, loading: authLoading } = useUserAuth();
+
   const currentUser = auth.currentUser;
   const isOAuthUser = currentUser?.providerData.some(
     (provider) => provider.providerId !== "password"
   );
 
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login");
+    }
+  }, [user, authLoading, router]);
+
+  // Fetch user data
   useEffect(() => {
     async function fetchUserData() {
+      if (!currentUser) return;
+
       setLoading(true);
       try {
-        if (currentUser) {
-          setEmail(currentUser.email || "");
-          if (!isOAuthUser) {
-            const userDoc = doc(db, "users", currentUser.uid);
-            const userSnapshot = await getDoc(userDoc);
-            if (userSnapshot.exists()) {
-              const data = userSnapshot.data();
-              setFirstName(data.firstName || "");
-              setLastName(data.lastName || "");
-            }
+        setEmail(currentUser.email || "");
+
+        if (!isOAuthUser) {
+          const userDoc = doc(db, "users", currentUser.uid);
+          const userSnapshot = await getDoc(userDoc);
+          if (userSnapshot.exists()) {
+            const data = userSnapshot.data();
+            setFirstName(data.firstName || "");
+            setLastName(data.lastName || "");
+          }
+        } else {
+          const displayName = currentUser.displayName || "";
+          if (displayName.includes(" ")) {
+            const [first, ...last] = displayName.split(" ");
+            setFirstName(first);
+            setLastName(last.join(" "));
           } else {
-            const displayName = currentUser.displayName || "";
-            if (displayName.includes(" ")) {
-              const [first, ...last] = displayName.split(" ");
-              setFirstName(first);
-              setLastName(last.join(" "));
-            } else {
-              setFirstName(displayName);
-              setLastName("");
-            }
+            setFirstName(displayName);
+            setLastName("");
           }
         }
-      } catch (e) {
+      } catch (error) {
         alert("Failed to load user data.");
       } finally {
         setLoading(false);
       }
     }
+
     fetchUserData();
-  }, [currentUser?.uid]);
+  }, [currentUser, isOAuthUser]);
 
   const handleUpdate = async () => {
     if (isOAuthUser) {
@@ -75,14 +90,10 @@ export default function Profile() {
       }
 
       const userDoc = doc(db, "users", currentUser.uid);
-      await updateDoc(userDoc, {
-        firstName,
-        lastName,
-        email,
-      });
+      await updateDoc(userDoc, { firstName, lastName, email });
 
       await updateProfile(currentUser, {
-        displayName: firstName + " " + lastName,
+        displayName: `${firstName} ${lastName}`,
       });
 
       if (email !== currentUser.email) {
@@ -103,22 +114,24 @@ export default function Profile() {
       return;
     }
 
-    const user = auth.currentUser;
-    if (!user || !user.email) {
+    if (!currentUser || !currentUser.email) {
       alert("No authenticated user.");
       return;
     }
 
     setDeleting(true);
     try {
-      const credential = EmailAuthProvider.credential(user.email, password);
-      await reauthenticateWithCredential(user, credential);
+      const credential = EmailAuthProvider.credential(
+        currentUser.email,
+        password
+      );
+      await reauthenticateWithCredential(currentUser, credential);
 
-      await deleteDoc(doc(db, "users", user.uid));
-
-      await deleteUser(user);
+      await deleteDoc(doc(db, "users", currentUser.uid));
+      await deleteUser(currentUser);
 
       alert("Account deleted successfully.");
+      router.push("/signup"); // Redirect after deletion
     } catch (error) {
       alert(error.message || "Error deleting account");
     } finally {
@@ -128,10 +141,12 @@ export default function Profile() {
     }
   };
 
-  if (loading) {
+  const isLoading = authLoading || loading || !user;
+
+  if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="loader">Loading...</div>
+      <div className="flex items-center justify-center h-screen bg-gray-800">
+        <p className="text-white">Loading...</p>
       </div>
     );
   }
@@ -167,7 +182,6 @@ export default function Profile() {
       )}
 
       <label className="block mb-2 text-gray-700 font-semibold">Email</label>
-
       {isOAuthUser ? (
         <div className="p-3 bg-gray-100 rounded mb-6 text-gray-600">
           {email}

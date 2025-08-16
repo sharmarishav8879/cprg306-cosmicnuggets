@@ -1,14 +1,32 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useUserAuth } from "../_utils/auth-context";
+import { useRouter } from "next/navigation";
 
 export default function Explore() {
   const [planets, setPlanets] = useState("");
   const [facts, setFacts] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const { user, loading: authLoading } = useUserAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login");
+    }
+  }, [user, authLoading, router]);
+
+  if (authLoading || !user) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-800">
+        <p className="text-white">Loading...</p>
+      </div>
+    );
+  }
 
   const fetchPlanets = async () => {
     if (!planets.trim()) return;
-    setLoading(true);
+    setFetching(true);
     try {
       const response = await fetch(
         `https://api.api-ninjas.com/v1/planets?name=${encodeURIComponent(
@@ -25,7 +43,7 @@ export default function Explore() {
     } catch (error) {
       alert("Failed to fetch planets.");
     } finally {
-      setLoading(false);
+      setFetching(false);
     }
   };
 
@@ -60,9 +78,9 @@ export default function Explore() {
         <button
           className="bg-blue-500 text-white px-4 py-2 mb-4 rounded hover:bg-blue-600 transition-colors duration-300"
           onClick={fetchPlanets}
-          disabled={loading}
+          disabled={fetching}
         >
-          {loading ? "Loading..." : "Fetch Planet Facts"}
+          {fetching ? "Fetching..." : "Fetch Planet Facts"}
         </button>
 
         {facts && facts.length > 0 && (

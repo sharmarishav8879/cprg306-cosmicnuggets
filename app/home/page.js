@@ -6,17 +6,35 @@ import facts from "./spaceFacts.json";
 import { useState, useEffect } from "react";
 
 export default function Home() {
-  const { firebaseSignOut } = useUserAuth();
+  const { firebaseSignOut, user, loading } = useUserAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    setCurrentFact(getRandomFact());
-  }, []);
+  // Hook state first
+  const [currentFact, setCurrentFact] = useState("");
+
+  // Helper function declared before useEffect
   const getRandomFact = () => {
     return facts[Math.floor(Math.random() * facts.length)].fact;
   };
 
-  const [currentFact, setCurrentFact] = useState("");
+  // Effect runs after state/hooks
+  useEffect(() => {
+    if (!loading) {
+      if (!user) {
+        router.push("/login");
+      } else {
+        setCurrentFact(getRandomFact());
+      }
+    }
+  }, [user, loading, router]);
+
+  if (loading || !user) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-800">
+        <p className="text-white">Loading...</p>
+      </div>
+    );
+  }
 
   const handleSignOut = async () => {
     try {
@@ -42,12 +60,12 @@ export default function Home() {
           src="/images/space.jpg"
           alt="Space"
           className="absolute h-full w-full mt-13 opacity-30"
-        ></img>
+        />
         <div className="bg-blue-200 shadow-md relative rounded-lg p-6 w-3/4 max-w-md text-center">
           <p className="text-lg text-black font-extrabold font-serif mb-2">
             Random Space Fact:
           </p>
-          <p className="text-md font-serif text-black ">{currentFact}</p>
+          <p className="text-md font-serif text-black">{currentFact}</p>
           <button
             onClick={newFacts}
             className="bg-black mt-4 text-white px-4 py-2 rounded hover:bg-gray-800 transition-colors duration-300"
@@ -58,7 +76,7 @@ export default function Home() {
       </div>
 
       <button
-        className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 position absolute bottom-3"
+        className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 absolute bottom-3"
         onClick={handleSignOut}
         type="button"
       >
